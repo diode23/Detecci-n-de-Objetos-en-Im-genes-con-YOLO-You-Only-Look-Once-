@@ -1,0 +1,61 @@
+# Importar las bibliotecas necesarias
+import cv2  # Biblioteca OpenCV para procesamiento de imágenes
+import numpy as np  # Biblioteca NumPy para operaciones numéricas
+import matplotlib.pyplot as plt  # Biblioteca Matplotlib para visualización
+
+# Cargar el modelo pre-entrenado YOLO y configuración
+net = cv2.dnn.readNet("yolov3.weights", "yolov3.cfg")
+classes = []  # Lista de clases detectables
+with open("coco.names", "r") as f:
+    classes = [line.strip() for line in f.readlines()]
+
+layer_names = net.getLayerNames()
+output_layers = [layer_names[i[0] - 1] for i in net.getUnconnectedOutLayers()]
+
+# Cargar la imagen de entrada
+img = cv2.imread("image.jpg")
+height, width, channels = img.shape
+
+# Preprocesamiento de la imagen para YOLO
+blob = cv2.dnn.blobFromImage(img, 0.00392, (416, 416), (0, 0, 0), True, crop=False)
+net.setInput(blob)
+outs = net.forward(output_layers)
+
+# Procesar las detecciones y dibujar cajas delimitadoras
+class_ids = []
+confidences = []
+boxes = []
+for out in outs:
+    for detection in out:
+        scores = detection[5:]
+        class_id = np.argmax(scores)
+        confidence = scores[class_id]
+        if confidence > 0.5:
+            center_x = int(detection[0] * width)
+            center_y = int(detection[1] * height)
+            w = int(detection[2] * width)
+            h = int(detection[3] * height)
+            x = int(center_x - w / 2)
+            y = int(center_y - h / 2)
+            boxes.append([x, y, w, h])
+            confidences.append(float(confidence))
+            class_ids.append(class_id)
+
+indexes = cv2.dnn.NMSBoxes(boxes, confidences, 0.5, 0.4)
+
+# Mostrar los objetos detectados en la imagen
+font = cv2.FONT_HERSHEY_PLAIN
+colors = np.random.uniform(0, 255, size=(len(classes), 3))
+for i in range(len(boxes)):
+    if i in indexes:
+        x, y, w, h = boxes[i]
+        label = str(classes[class_ids[i]])
+        color = colors[i]
+        cv2.rectangle(img, (x, y), (x + w, y + h), color, 2)
+        cv2.putText(img, label, (x, y + 30), font, 3, color, 3)
+
+# Mostrar la imagen con los objetos detectados
+plt.figure(figsize=(10,10))
+plt.imshow(cv2.cvtColor(img, cv2.COLOR_BGR2RGB))
+plt.axis('off')
+plt.show()
